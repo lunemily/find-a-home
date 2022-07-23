@@ -4,20 +4,15 @@ import os
 import sys
 from time import sleep
 
+from requests_html import HTMLSession
+
 from lxml import etree, html
 from lxml.etree import Element
 import requests
 
-# from selenium import webdriver
-# from selenium.webdriver.chrome.service import Service
-# from selenium.webdriver.chrome import options
-# from selenium.webdriver.common.by import By
-# from selenium.webdriver.remote.webelement import WebElement
-# from webdriver_manager.chrome import ChromeDriverManager
-
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 
-# driver = webdriver.Chrome
+session = HTMLSession()
 
 metros = [
     {
@@ -222,6 +217,13 @@ def get_page(url: str) -> etree:
     return html.fromstring(response.content)
 
 
+def get_page_with_js(url: str) -> etree:
+    logging.info(f'Requesting js page at {url}')
+    response = session.get(url=url)
+    print(response.html.render())
+    return html.fromstring(response.content)
+
+
 def parse_city(metro: dict, city_element: etree.Element):
     city_link: str = city_element.attrib['href'].replace('..', best_places_city_base_url)
     city_name: str = city_element[0].text
@@ -250,7 +252,6 @@ def parse_city(metro: dict, city_element: etree.Element):
     city['cost_of_living']      = str(city_page.xpath(best_places_city_cost_of_living)[0]).strip()
 
     niche_page: etree = get_page(f'https://www.niche.com/places-to-live/{city["city"]}-{city["county"]}-{city["state"]}/')
-    print(etree.tostring(niche_page))
 
     city_attribute = niche_page.xpath(niche_summary_grade_overall)
     logging.info(city_attribute)
