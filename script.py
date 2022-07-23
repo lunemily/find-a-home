@@ -4,64 +4,62 @@ import os
 import sys
 from time import sleep
 
-from requests_html import HTMLSession
-
 from lxml import etree, html
 from lxml.etree import Element
 import requests
 
-logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+requests.packages.urllib3.disable_warnings()
 
-session = HTMLSession()
+logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 
 metros = [
     {
-        'state': 'ct',
+        'state_code': 'ct',
         'metro': 'Bridgeport-Stamford-Norwalk',
         'msa_id': '14860',
     },
     {
-        'state': 'ct',
+        'state_code': 'ct',
         'metro': 'New Haven-Milford',
         'msa_id': '35300',
     },
     {
-        'state': 'me',
+        'state_code': 'me',
         'metro': 'Portland-South Portland',
         'msa_id': '38860',
     },
     {
-        'state': 'md',
+        'state_code': 'md',
         'metro': 'Baltimore-Columbia-Towson',
         'msa_id': '12580',
     },
     {
-        'state': 'ma',
+        'state_code': 'ma',
         'metro': 'Boston-Cambridge-Newton',
         'msa_id': '14460',
     },
     {
-        'state': 'ma',
+        'state_code': 'ma',
         'metro': 'Worcester',
         'msa_id': '49340',
     },
     {
-        'state': 'nj',
+        'state_code': 'nj',
         'metro': 'New York-Newark-Jersey City',
         'msa_id': '35620',
     },
     {
-        'state': 'nj',
+        'state_code': 'nj',
         'metro': 'Philadelphia-Camden-Wilmington',
         'msa_id': '37980',
     },
     {
-        'state': 'ny',
+        'state_code': 'ny',
         'metro': 'New York-Newark-Jersey City',
         'msa_id': '35620',
     },
     {
-        'state': 'Providence-Warwick',
+        'state_code': 'Providence-Warwick',
         'metro': 'Bridgeport',
         'msa_id': '39300',
     },
@@ -164,9 +162,10 @@ csv_columns = [
     
 ]
 
-best_places_city_base_url = 'https://www.bestplaces.net/'
+best_places_city_base_url = 'https://www.bestplaces.net'
 
 best_places_city_url =                      '//div[@class="col-md-4"]/ul/li/a'
+best_places_city_state =                    '//b[text()="State:"]/following-sibling::u[1]/a'
 best_places_city_population =               '//u[contains(text(),"Population")]/../../following-sibling::p[1]'
 best_places_city_med_income =               '//u[contains(text(),"Median Income")]/../../following-sibling::p[1]'
 best_places_city_med_age =                  '//u[contains(text(),"Median Age")]/../../following-sibling::p[1]'
@@ -176,26 +175,14 @@ best_places_city_comfort =                  '//u[contains(text(),"Comfort Index 
 best_places_city_county =                   '//b[text()="County:"]/following-sibling::u[1]/a'
 best_places_city_primary_zip_code =         '//b[text()="Zip Codes:"]/../a[1]/u'
 best_places_city_cost_of_living =           '//b[text()="Cost of Living:"]/following-sibling::text()[1]'
-best_places_jobs_future_jobs =              ''
-best_places_health_cost_index =             ''
-best_places_health_water_quality_index =    ''
-best_places_health_superfund_index =        ''
-best_places_health_air_quality_index =      ''
-best_places_voting_vote_word =              ''
+best_places_jobs_future_jobs =              '//u[text()="Future Job Growth"]/../../following-sibling::td[1]'
+best_places_health_cost_index =             '//h6[text()="HEALTH COST INDEX"]/following-sibling::div[1]'
+best_places_health_water_quality_index =    '//h6[text()="WATER QUALITY INDEX"]/following-sibling::div[1]'
+best_places_health_superfund_index =        '//h6[text()="SUPERFUND INDEX"]/following-sibling::div[1]'
+best_places_health_air_quality_index =      '//h6[text()="AIR QUALITY INDEX"]/following-sibling::div[1]'
+best_places_voting_vote_word =              '//h5[text()="VoteWord™"]/following-sibling::h5[1]'
 
-
-
-niche_summary_grade_overall =               '//div[@class="overall-grade"]'  # /div/div/span/following-sibling::text()
-# and all niche grades
-niche_residents_poverty =                   ''
-niche_residents_community_percent =         ''
-niche_residents_lgbtq_percent =             ''
-niche_residents_lgbtq_acceptance_level =    ''
-
-area_vibes_livibility_total =               ''
-# and other scores on livibility
-area_vibes_livibility_usa_rank =            ''
-# all crime from table
+area_vibes_livibility_total =               '//img[contains(@alt, "livability")]/following-sibling::em[1]'
 
 
 
@@ -217,30 +204,22 @@ def get_page(url: str) -> etree:
     return html.fromstring(response.content)
 
 
-def get_page_with_js(url: str) -> etree:
-    logging.info(f'Requesting js page at {url}')
-    response = session.get(url=url)
-    print(response.html.render())
-    return html.fromstring(response.content)
-
-
 def parse_city(metro: dict, city_element: etree.Element):
     city_link: str = city_element.attrib['href'].replace('..', best_places_city_base_url)
     city_name: str = city_element[0].text
     logging.info(f'Getting information about {city_name}')
-    logging.info(f'City URL: {city_link}')
-    city = {
-        'state': metro.get('state'),
-        'metro': metro.get('metro'),
-        'metro_id': metro.get('msa_id'),
-        'city': city_element[0].text,
-    }
+    city = {}
 
     # Get city information
     # Best Places
-
+    # Summary Page + inputs
     city_page: etree = get_page(city_link.replace('..', best_places_city_base_url))
 
+    city['state']               = str(city_page.xpath(best_places_city_state)[0].text).strip()
+    city['state_code']          = str.upper(metro.get('state_code'))
+    city['metro']               = metro.get('metro')
+    city['metro_id']            = metro.get('msa_id')
+    city['city']                = city_name
     city['county']              = str(city_page.xpath(best_places_city_county)[0].text).replace('County','').strip()
     city['zip_code']            = str(city_page.xpath(best_places_city_primary_zip_code)[0].text)
     city['population']          = str(city_page.xpath(best_places_city_population)[0].text)
@@ -251,45 +230,68 @@ def parse_city(metro: dict, city_element: etree.Element):
     city['comfort_index']       = str(city_page.xpath(best_places_city_comfort)[0].text)
     city['cost_of_living']      = str(city_page.xpath(best_places_city_cost_of_living)[0]).strip()
 
-    niche_page: etree = get_page(f'https://www.niche.com/places-to-live/{city["city"]}-{city["county"]}-{city["state"]}/')
+    sleep(1)
 
-    city_attribute = niche_page.xpath(niche_summary_grade_overall)
-    logging.info(city_attribute)
+    # Jobs Page
+    city_jobs_page: etree = get_page(url=f'https://www.bestplaces.net/jobs/city/{city["state"]}/{city["city"]}')
 
-    city['niche_grade']         = str('')
+    city['future_job_growth']   = str(city_jobs_page.xpath(best_places_jobs_future_jobs)[0].text)
+
+    sleep(1)
+
+    # Health Page
+    city_health_page: etree = get_page(url=f'https://www.bestplaces.net/health/city/{city["state"]}/{city["city"]}')
+
+    city['health_cost_index']   = str(city_health_page.xpath(best_places_health_cost_index)[0].text).strip()
+
+    sleep(1)
+
+    # Voting Page
+    city_voting_page: etree = get_page(url=f'https://www.bestplaces.net/voting/city/{city["state"]}/{city["city"]}')
+
+    element = str.split(city_voting_page.xpath(best_places_voting_vote_word)[0].text, ':')[1].strip()
+    print(element)
+
+    city['voteword']            = str.split(city_voting_page.xpath(best_places_voting_vote_word)[0].text, ':')[1].strip()
+
+
+    # Area Vibes
+    area_vibes_page: etree = get_page(url=f'https://www.areavibes.com/{city["city"]}-{city["state_code"]}')
+
+    city['livability_score']    = str(area_vibes_page.xpath(area_vibes_livibility_total)[0].text)
 
     return city
 
 
 def save_city(city: dict):
     filename = f'output/{city.get("metro")}.csv'
-    with open(file=filename, mode='w+') as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=[key for key in city], delimiter=',', quotechar='\"', quoting=csv.QUOTE_NONNUMERIC)
-
-        writer.writeheader()
+    with open(file=filename, mode='a') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=[key for key in city], delimiter=',', quotechar='\"', quoting=csv.QUOTE_NONNUMERIC, lineterminator='\n')
+        if os.stat(filename).st_size == 0:
+            writer.writeheader()
         writer.writerow(city)
 
 
 def parse_and_save_city(metro: dict, city_element: etree.Element):
-    city = parse_city(metro=metro, city_element=city_element)
-
     # If city already in file, move on to next one
     filename = f'output/{metro.get("metro")}.csv'
-    with open(file=filename, mode='w+') as csvfile:
+    city_name: str = city_element[0].text
+
+    with open(file=filename, mode='r') as csvfile:
         reader = csv.DictReader(csvfile, delimiter=',')
-        logging.info(f'Searching for {city["city"]} in {filename}')
+        logging.info(f'Searching for {city_name} in {filename}')
         for row in reader:
-            logging.info(row)
-            if city['city'] == row['city']:
-                logging.INFO(f'{city["city"]} found in {filename}. Skipping.')
+            if city_name == row['city']:
+                logging.warning(f'{city_name} found in {filename}. Skipping.')
                 return None
-    logging.info(f'{city["city"]} not found in {filename}. Saving.')
+    logging.info(f'{city_name} not found in {filename}. Saving.')
+    city = parse_city(metro=metro, city_element=city_element)
     save_city(city=city)
 
 
 def main():
     for metro in metros:
-        best_places_url = f'https://www.bestplaces.net/find/state.aspx?state={metro.get("state")}&msa={metro.get("msa_id")}'
+        best_places_url = f'https://www.bestplaces.net/find/state.aspx?state={metro.get("state_code")}&msa={metro.get("msa_id")}'
         logging.info(f'Gathering information for {metro.get("metro")}')
         logging.info(f'Best places URL: {best_places_url}')
 
@@ -298,7 +300,7 @@ def main():
 
         for city in metro_cities:
             parse_and_save_city(metro=metro, city_element=city)
-            sleep(60)
+            sleep(5)
 
         sleep(5)
 
