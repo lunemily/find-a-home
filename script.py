@@ -10,7 +10,8 @@ import requests
 
 requests.packages.urllib3.disable_warnings()
 
-logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+log_file = 'cities.log'
+logging.basicConfig(filename=log_file, level=logging.INFO)
 
 metros = [
     {
@@ -215,20 +216,25 @@ def parse_city(metro: dict, city_element: etree.Element):
     # Summary Page + inputs
     city_page: etree = get_page(city_link.replace('..', best_places_city_base_url))
 
-    city['state']               = str(city_page.xpath(best_places_city_state)[0].text).strip()
-    city['state_code']          = str.upper(metro.get('state_code'))
-    city['metro']               = metro.get('metro')
-    city['metro_id']            = metro.get('msa_id')
-    city['city']                = city_name
-    city['county']              = str(city_page.xpath(best_places_city_county)[0].text).replace('County','').strip()
-    city['zip_code']            = str(city_page.xpath(best_places_city_primary_zip_code)[0].text)
-    city['population']          = str(city_page.xpath(best_places_city_population)[0].text)
-    city['unemployment']        = str(city_page.xpath(best_places_city_unempl_rate)[0].text)
-    city['median_income']       = str(city_page.xpath(best_places_city_med_income)[0].text)
-    city['median_home_price']   = str(city_page.xpath(best_places_city_med_home)[0].text)
-    city['median_age']          = str(city_page.xpath(best_places_city_med_age)[0].text)
-    city['comfort_index']       = str(city_page.xpath(best_places_city_comfort)[0].text)
-    city['cost_of_living']      = str(city_page.xpath(best_places_city_cost_of_living)[0]).strip()
+    city['state']                   = str(city_page.xpath(best_places_city_state)[0].text).strip()
+    city['state_code']              = str.upper(metro.get('state_code'))
+    city['metro']                   = metro.get('metro')
+    city['metro_id']                = metro.get('msa_id')
+    city['city']                    = city_name
+    city['county']                  = str(city_page.xpath(best_places_city_county)[0].text).replace('County','').strip()
+    try:
+        city['zip_code']            = str(city_page.xpath(best_places_city_primary_zip_code)[0].text)
+    except IndexError as e:
+        logging.error('Zip Code not available')
+        city['zip_code']            = 'None'
+    city['population']              = str(city_page.xpath(best_places_city_population)[0].text)
+    city['unemployment']            = str(city_page.xpath(best_places_city_unempl_rate)[0].text)
+    city['median_income']           = str(city_page.xpath(best_places_city_med_income)[0].text)
+    city['median_home_price']       = str(city_page.xpath(best_places_city_med_home)[0].text)
+    city['median_age']              = str(city_page.xpath(best_places_city_med_age)[0].text)
+    city['summer_comfort_index']    = str.split(city_page.xpath(best_places_city_comfort)[0].text, ' / ')[0]
+    city['winter_comfort_index']    = str.split(city_page.xpath(best_places_city_comfort)[0].text, ' / ')[1]
+    city['cost_of_living']          = str(city_page.xpath(best_places_city_cost_of_living)[0]).strip()
 
     sleep(1)
 
@@ -243,22 +249,25 @@ def parse_city(metro: dict, city_element: etree.Element):
     city_health_page: etree = get_page(url=f'https://www.bestplaces.net/health/city/{city["state"]}/{city["city"]}')
 
     city['health_cost_index']   = str(city_health_page.xpath(best_places_health_cost_index)[0].text).strip()
+    city['water_quality_index'] = str(city_health_page.xpath(best_places_health_water_quality_index)[0].text).strip()
+    city['superfund_index']     = str(city_health_page.xpath(best_places_health_superfund_index)[0].text).strip()
+    city['air_quality_index']   = str(city_health_page.xpath(best_places_health_air_quality_index)[0].text).strip()
 
     sleep(1)
 
     # Voting Page
     city_voting_page: etree = get_page(url=f'https://www.bestplaces.net/voting/city/{city["state"]}/{city["city"]}')
 
-    element = str.split(city_voting_page.xpath(best_places_voting_vote_word)[0].text, ':')[1].strip()
-    print(element)
-
-    city['voteword']            = str.split(city_voting_page.xpath(best_places_voting_vote_word)[0].text, ':')[1].strip()
-
+    city['voteword']    = str.split(city_voting_page.xpath(best_places_voting_vote_word)[0].text, ':')[1].strip()
 
     # Area Vibes
     area_vibes_page: etree = get_page(url=f'https://www.areavibes.com/{city["city"]}-{city["state_code"]}')
 
-    city['livability_score']    = str(area_vibes_page.xpath(area_vibes_livibility_total)[0].text)
+    try:
+        city['livability_score']    = str(area_vibes_page.xpath(area_vibes_livibility_total)[0].text)
+    except IndexError as e:
+        logging.error('City not found on Area Vibes')
+        city['livability_score']    = 'None'
 
     return city
 
